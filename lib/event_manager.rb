@@ -1,28 +1,51 @@
 require 'csv'
+require 'google/apis/civicinfo_v2'
+require 'erb'
 
-# def clean_zipcode(zipcode)
-#   if zipcode.nil?
-#     zipcode = '00000'
-#   elsif zipcode.length < 5 # Se zipcodes forem menor do que 5, acrescenta zeros
-#     zipcode = zipcode.rjust 5, '0'
-#   elsif zipcode.length > 5 # Se forem maior que 5 pega os primeiros 5 digitos
-#     zipcode = zipcode[0..4]
-#   end
-# end
-
-# Um metodo mais conciso para o clean_zipcode
+# Um metodo mais conciso para o clean_zipcode. obs: ver exemplos.rb
 def clean_zipcode(zipcode)
   zipcode.to_s.rjust(5, '0')[0..4]
 end
 
-puts 'Gerenciador de Eventos inicializado!'
+def legislators_by_zipcode(zip)
+  civic_info = Google::Apis::CivicinfoV2::CivicInfoService.new
+  civic_info.key = 'AIzaSyClRzDqDh5MsXwnCWi0kOiiBivP6JsSyBw'
+
+  begin #Inicia Exception Class, caso algum valor seja nulo responde com o rescue
+    civic_info.representative_info_by_address(
+      address: zip,
+      levels: 'country',
+      roles: ['legislatorUpperBody', 'legislatorLowerBody']
+    ).officials
+  rescue
+    'Você pode encontrar o que procura em www.commoncause.org/take-action/find-elected-officials'
+  end
+end
+
+def save_thank_you_letter(id,form_letter)
+  Dir.mkdir('output') unless Dir.exists? 'output'
+
+  filename = "output/thanks_#{id}.html"
+
+  File.open(filename, 'w') do |file|
+    file.puts form_letter
+  end
+end
+
+puts 'Gerenciador de Eventos Inicializado!'
 
 contents =  CSV.open 'event_attendees.csv', headers: true, header_converters: :symbol
 
+template_letter = File.read 'form_letter.erb'
+erb_template = ERB.new template_letter
+
 contents.each do |row|
+  id = row[0]
   name = row[:first_name] # Captura valor da coluna nome
-
   zipcode = clean_zipcode(row[:zipcode])
+  legislators = legislators_by_zipcode(zipcode)
 
-  puts "#{name} #{zipcode}"
+  form_letter = erb_template.result(binding)
+
+  save_thank_you_letter(id,form_letter)  
 end
